@@ -118,16 +118,18 @@ def num_classes_of_dataset(dataset):
 
 def get_model(args):
     llkw = dict(grad_factor=args.grad_factor, connections=args.connections)
-
+    #print("llkw: ", llkw)
     in_dim = input_dim_of_dataset(args.dataset)
+    #print("in_dim: ", in_dim)
     class_count = num_classes_of_dataset(args.dataset)
 
     logic_layers = []
 
     arch = args.architecture
     k = args.num_neurons
+    ##print("no of neurons: ", k)
     l = args.num_layers
-
+    #print("no. of layers: ", l)
     ####################################################################################################################
 
     if arch == 'randomly_connected':
@@ -149,9 +151,9 @@ def get_model(args):
     ####################################################################################################################
 
     total_num_neurons = sum(map(lambda x: x.num_neurons, logic_layers[1:-1]))
-    print(f'total_num_neurons={total_num_neurons}')
+    #print(f'total_num_neurons={total_num_neurons}')
     total_num_weights = sum(map(lambda x: x.num_weights, logic_layers[1:-1]))
-    print(f'total_num_weights={total_num_weights}')
+    #print(f'total_num_weights={total_num_weights}')
     if args.experiment_id is not None:
         results.store_results({
             'total_num_neurons': total_num_neurons,
@@ -233,11 +235,12 @@ if __name__ == '__main__':
 
     parser.add_argument('--implementation', type=str, default='cuda', choices=['cuda', 'python'],
                         help='`cuda` is the fast CUDA implementation and `python` is simpler but much slower '
-                        'implementation intended for helping with the understanding.')
+                       'implementation intended for helping with the understanding.')
 
     parser.add_argument('--packbits_eval', action='store_true', help='Use the PackBitsTensor implementation for an '
                                                                      'additional eval step.')
     parser.add_argument('--compile_model', action='store_true', help='Compile the final model with C for CPU.')
+    parser.add_argument('--generate_verilog', action="store_true", help="Generate the verilog for simulation.")
 
     parser.add_argument('--num-iterations', '-ni', type=int, default=100_000, help='Number of iterations (default: 100_000)')
     parser.add_argument('--eval-freq', '-ef', type=int, default=2_000, help='Evaluation frequency (default: 2_000)')
@@ -251,86 +254,95 @@ if __name__ == '__main__':
     parser.add_argument('--num_layers', '-l', type=int)
 
     parser.add_argument('--grad-factor', type=float, default=1.)
-
+    parser.add_argument('--load_pretrained_model', action="store_true", help="to load a pretrained model for inference")
+    parser.add_argument('--save_model', action="store_true", help="to save a trained model")
+    parser.add_argument('--generate_onnx', action="store_true", help="to generate onnx of .pt model")
     args = parser.parse_args()
 
     ####################################################################################################################
 
     print(vars(args))
 
-    assert args.num_iterations % args.eval_freq == 0, (
-        f'iteration count ({args.num_iterations}) has to be divisible by evaluation frequency ({args.eval_freq})'
-    )
+    if args.load_pretrained_model is not True:
 
-    if args.experiment_id is not None:
-        assert 520_000 <= args.experiment_id < 530_000, args.experiment_id
-        results = ResultsJSON(eid=args.experiment_id, path='./results/')
-        results.store_args(args)
+        assert args.num_iterations % args.eval_freq == 0, (
+            f'iteration count ({args.num_iterations}) has to be divisible by evaluation frequency ({args.eval_freq})'
+        )
 
-    torch.manual_seed(args.seed)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+        if args.experiment_id is not None:
+            assert 520_000 <= args.experiment_id < 530_000, args.experiment_id
+            results = ResultsJSON(eid=args.experiment_id, path='./results/')
+            results.store_args(args)
 
-    train_loader, validation_loader, test_loader = load_dataset(args)
-    model, loss_fn, optim = get_model(args)
+        torch.manual_seed(args.seed)
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+
+        train_loader, validation_loader, test_loader = load_dataset(args)
+        model, loss_fn, optim = get_model(args)
 
     ####################################################################################################################
 
-    best_acc = 0
+        best_acc = 0
 
-    for i, (x, y) in tqdm(
-            enumerate(load_n(train_loader, args.num_iterations)),
-            desc='iteration',
-            total=args.num_iterations,
-    ):
-        x = x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]).to('cuda')
-        y = y.to('cuda')
+        for i, (x, y) in tqdm(
+                enumerate(load_n(train_loader, args.num_iterations)),
+                desc='iteration',
+                total=args.num_iterations,
+        ):
+            x = x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]).to('cuda')
+            y = y.to('cuda')
 
-        loss = train(model, x, y, loss_fn, optim)
+            loss = train(model, x, y, loss_fn, optim)
 
-        if (i+1) % args.eval_freq == 0:
-            if args.extensive_eval:
-                train_accuracy_train_mode = eval(model, train_loader, mode=True)
-                valid_accuracy_eval_mode = eval(model, validation_loader, mode=False)
-                valid_accuracy_train_mode = eval(model, validation_loader, mode=True)
-            else:
-                train_accuracy_train_mode = -1
-                valid_accuracy_eval_mode = -1
-                valid_accuracy_train_mode = -1
-            train_accuracy_eval_mode = eval(model, train_loader, mode=False)
-            test_accuracy_eval_mode = eval(model, test_loader, mode=False)
-            test_accuracy_train_mode = eval(model, test_loader, mode=True)
-
-            r = {
-                'train_acc_eval_mode': train_accuracy_eval_mode,
-                'train_acc_train_mode': train_accuracy_train_mode,
-                'valid_acc_eval_mode': valid_accuracy_eval_mode,
-                'valid_acc_train_mode': valid_accuracy_train_mode,
-                'test_acc_eval_mode': test_accuracy_eval_mode,
-                'test_acc_train_mode': test_accuracy_train_mode,
-            }
-
-            if args.packbits_eval:
-                r['train_acc_eval'] = packbits_eval(model, train_loader)
-                r['valid_acc_eval'] = packbits_eval(model, train_loader)
-                r['test_acc_eval'] = packbits_eval(model, test_loader)
-
-            if args.experiment_id is not None:
-                results.store_results(r)
-            else:
-                print(r)
-
-            if valid_accuracy_eval_mode > best_acc:
-                best_acc = valid_accuracy_eval_mode
-                if args.experiment_id is not None:
-                    results.store_final_results(r)
+            if (i+1) % args.eval_freq == 0:
+                if args.extensive_eval:
+                    train_accuracy_train_mode = eval(model, train_loader, mode=True)
+                    valid_accuracy_eval_mode = eval(model, validation_loader, mode=False)
+                    valid_accuracy_train_mode = eval(model, validation_loader, mode=True)
                 else:
-                    print('IS THE BEST UNTIL NOW.')
+                    train_accuracy_train_mode = -1
+                    valid_accuracy_eval_mode = -1
+                    valid_accuracy_train_mode = -1
+                train_accuracy_eval_mode = eval(model, train_loader, mode=False)
+                test_accuracy_eval_mode = eval(model, test_loader, mode=False)
+                test_accuracy_train_mode = eval(model, test_loader, mode=True)
 
-            if args.experiment_id is not None:
-                results.save()
+                r = {
+                    'train_acc_eval_mode': train_accuracy_eval_mode,
+                    'train_acc_train_mode': train_accuracy_train_mode,
+                    'valid_acc_eval_mode': valid_accuracy_eval_mode,
+                    'valid_acc_train_mode': valid_accuracy_train_mode,
+                    'test_acc_eval_mode': test_accuracy_eval_mode,
+                    'test_acc_train_mode': test_accuracy_train_mode,
+                }
+
+                if args.packbits_eval:
+                    r['train_acc_eval'] = packbits_eval(model, train_loader)
+                    r['valid_acc_eval'] = packbits_eval(model, train_loader)
+                    r['test_acc_eval'] = packbits_eval(model, test_loader)
+
+                if args.experiment_id is not None:
+                    results.store_results(r)
+                else:
+                    print(r)
+
+                if valid_accuracy_eval_mode > best_acc:
+                    best_acc = valid_accuracy_eval_mode
+                    if args.experiment_id is not None:
+                        results.store_final_results(r)
+                    else:
+                        print('IS THE BEST UNTIL NOW.')
+
+                if args.experiment_id is not None:
+                    results.save()
 
     ####################################################################################################################
+    else:
+        model, loss_fn, optim = get_model(args)
+        model.load_state_dict(torch.load("./saved_models/model.pt", weights_only="True"))
+        model.eval()  # Set the model to evaluation mode
+        print("Pretrained model loaded successfully!")
 
     if args.compile_model:
         print('\n' + '='*80)
@@ -357,23 +369,70 @@ if __name__ == '__main__':
                     # cpu_compiler='clang',
                     verbose=True,
                 )
+                print("Compiled_model: ", compiled_model)
 
                 compiled_model.compile(
                     opt_level=1 if args.num_layers * args.num_neurons < 50_000 else 0,
                     save_lib_path=save_lib_path,
                     verbose=True
-                )
+                    )
+                print("model compiled......")
 
                 correct, total = 0, 0
                 with torch.no_grad():
                     for (data, labels) in torch.utils.data.DataLoader(test_loader.dataset, batch_size=int(1e6), shuffle=False):
                         data = torch.nn.Flatten()(data).bool().numpy()
-
+                        print("data: ", data)
                         output = compiled_model(data, verbose=True)
-
+                        print("output: ", output)
                         correct += (output.argmax(-1) == labels).float().sum()
+                        print("correct: ", correct)
                         total += output.shape[0]
+                        print("total: ", total)
 
                 acc3 = correct / total
                 print('COMPILED MODEL', num_bits, acc3)
+    
+    if args.generate_verilog:
+        compiled_model = CompiledLogicNet(
+                     model=model,
+                     num_bits=64,
+                     cpu_compiler='gcc',
+                     verbose=True,
+                 )
+        save_folder="./generated-verilog"
+        if not os.path.exists(save_folder):
+            os.makedirs(save_folder)
+            print(f"Created directory: {save_folder}")
+        print(dir(compiled_model))
+        compiled_model.compile_verilog(
+                     save_folder=save_folder,
+                     verbose=False
+                     )
+        print("Verilog generated......")
+
+    if args.save_model:
+        save_folder="./saved_models"
+        if not os.path.exists(save_folder):
+            os.makedirs(save_folder)
+            print(f"Created directory: {save_folder}")
+        print("model.state_dict(): ", model.state_dict())
+        model_path = os.path.join(save_folder, "model.pt")
+        torch.save(model.state_dict(), model_path)
+        print("Model saved successfully!")
+    
+    if args.generate_onnx:
+        dummy_input = torch.randn(1,16)
+        torch.onnx.export(
+        model,
+        dummy_input,
+        "model.onnx",
+        input_names=["input"],
+        output_names=["output"]
+        )
+
+        print("Model successfully converted to ONNX format!")
+
+
+
 

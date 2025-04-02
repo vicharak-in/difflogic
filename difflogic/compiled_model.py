@@ -318,6 +318,108 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
 
         self.lib_fn = lib_fn
 
+    def get_verilog_gate_code(self, var1, var2, gate_op):
+        operation_name = ALL_OPERATIONS[gate_op]
+
+        if operation_name == "zero":
+            res="1'b0"
+        elif operation_name == "and":
+            res=f"{var1} & {var2}"
+        elif operation_name == "not_implies":
+            res=f"{var1} & ~{var2}"
+        elif operation_name == "a":
+            res=f"{var1}"
+        elif operation_name == "not_implied_by":
+            res=f"{var2} & ~{var1}"
+        elif operation_name == "b":
+            res=f"{var2}"
+        elif operation_name == "xor":
+            res=f"{var1} ^ {var2}"
+        elif operation_name == "or":
+            res=f"{var1} | {var2}"
+        elif operation_name == "not_or":
+            res=f"~({var1} | {var2})"
+        elif operation_name == "not_xor":
+            res=f"~({var1} ^ {var2})"
+        elif operation_name == "not_b":
+            res=f"~{var2}"
+        elif operation_name == "implied_by":
+            res=f"~{var2} | {var1}"
+        elif operation_name == "not_a":
+            res=f"~{var1}"
+        elif operation_name == "implies":
+            res=f"~{var1} | {var2}"
+        elif operation_name == "not_and":
+            res=f"~({var1} & {var2})"
+        elif operation_name == "one":
+            res="1'b1"
+        else:
+            assert False, f"Operator {operation_name} unknown."
+        return res
+
+    def get_verilog_code(self):
+        """Generates Verilog code for the logic network."""
+
+        code = [
+            "module logic_network ("
+            f"    input wire [{self.num_inputs-1}:0] x,",
+            f"    output wire [{self.num_outputs-1}:0] y",
+            ");",
+        ]
+
+        for layer_id in range(len(self.layers)):
+            print(f"{self.layers[layer_id]}: ", self.layers[layer_id])
+            layer_size = len(self.layers[layer_id][0])  #no. of neurons in a layer
+
+            code.append(f"      wire [{self.num_outputs-1}:0] layer{layer_id}_out;")
+
+        for layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers):
+            layer_size = len(layer_a)
+            for var_id, (gate_a, gate_b, gate_op) in enumerate(zip(layer_a, layer_b, layer_op)):
+                if layer_id == 0:
+                    a = f"x[{gate_a}]"
+                    b = f"x[{gate_b}]"
+                else:
+                    a = f"layer{layer_id-1}_out[{gate_a}]"
+                    b = f"layer{layer_id-1}_out[{gate_b}]"
+
+                gate_expr = self.get_verilog_gate_code(a, b, gate_op)
+
+                #print("self.layers: ", len(self.layers))
+                code.append(f"    assign layer{layer_id}_out[{var_id}] = {gate_expr};")
+
+        layer_id=len(self.layers)
+        for var_id in range(self.num_outputs):
+            code.append(f"      assign y[{var_id}] = layer{layer_id-1}_out[{var_id}];")
+
+        code.append("endmodule")
+
+        return "\n".join(code)
+
+    def compile_verilog(self, save_folder=None, verbose=True):
+        if self.device != 'cpu':
+            raise ValueError(f"Device {self.device} not supported.")
+
+        code = self.get_verilog_code()
+
+        if verbose and len(code.split('\n')) <= 200:
+            print("\n\n" + code + "\n\n")
+
+        if save_folder:
+            os.makedirs(save_folder, exist_ok=True)
+            v_file_path = os.path.join(save_folder, "compiled_verilog.v")
+        else:
+            # Use a temporary file if no folder is provided
+            v_file = tempfile.NamedTemporaryFile(mode="w", suffix=".v", delete=False)
+            v_file_path = v_file.name
+
+        with open(v_file_path, "w") as v_file:
+            v_file.write(code)
+
+        if verbose:
+            print(f"Verilog code saved at: {v_file_path}")
+            print(f"Verilog code has {len(code.splitlines())} lines.")
+
     @staticmethod
     def load(save_lib_path, num_classes, num_bits):
 
