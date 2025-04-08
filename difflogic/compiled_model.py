@@ -359,11 +359,14 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
 
     def get_verilog_code(self):
         """Generates Verilog code for the logic network."""
-
+        neurons_per_class=self.num_outputs // self.num_classes
+        log2_neurons_per_class=math.ceil(math.log2(neurons_per_class + 1))
+        output_bits=self.num_classes * log2_neurons_per_class
+        last_layer_output= []
         code = [
             "module logic_network ("
             f"    input wire [{self.num_inputs-1}:0] x,",
-            f"    output wire [{self.num_outputs-1}:0] y",
+            f"    output wire [{output_bits-1}:0] y",
             ");",
         ]
 
@@ -384,16 +387,29 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
                     b = f"layer{layer_id-1}_out[{gate_b}]"
 
                 gate_expr = self.get_verilog_gate_code(a, b, gate_op)
-
-                #print("self.layers: ", len(self.layers))
                 code.append(f"    assign layer{layer_id}_out[{var_id}] = {gate_expr};")
 
-        layer_id=len(self.layers)
-        for var_id in range(self.num_outputs):
-            code.append(f"      assign y[{var_id}] = layer{layer_id-1}_out[{var_id}];")
+            if layer_id==(len(self.layers))-1:
+                for i in range(self.num_outputs):
+                    last_layer_output.append(f"layer{layer_id}_out[{i}]")
+
+        code.append(f"      wire [{self.num_outputs-1}:0] last_layer_output;")
+        code.append(f"      assign last_layer_output = layer{len(self.layers)-1}_out;")
+        code.append(f"      wire [{log2_neurons_per_class-1}:0] result [{self.num_classes-1}:0];")
+        code.append("")
+
+        for cls in range(self.num_classes):
+            base_index = cls * neurons_per_class
+            terms = [f"last_layer_output[{base_index + n}]" for n in range(neurons_per_class)]
+            joined = " + ".join(terms)
+            code.append(f"      assign result[{cls}] = {joined};")
+
+        count=0
+        for i in range(output_bits,0,-5):
+            code.append(f"      assign y[{i-1}:{i-5}]=result[{count}];")
+            count=count+1
 
         code.append("endmodule")
-
         return "\n".join(code)
 
     def compile_verilog(self, save_folder=None, verbose=True):
