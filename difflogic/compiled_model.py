@@ -9,7 +9,7 @@ import numpy as np
 import numpy.typing
 import time
 from typing import Union
-
+import os
 
 ALL_OPERATIONS = [
     "zero",
@@ -62,6 +62,7 @@ class CompiledLogicNet(torch.nn.Module):
             layers = []
 
             self.num_inputs = None
+            self.num_outputs = None
 
             assert isinstance(self.model[-1], GroupSum), 'The last layer of the model must be GroupSum, but it is {} / {}' \
                                                          ' instead.'.format(type(self.model[-1]), self.model[-1])
@@ -73,7 +74,8 @@ class CompiledLogicNet(torch.nn.Module):
                     if first:
                         self.num_inputs = layer.in_dim
                         first = False
-                    self.num_out_per_class = layer.out_dim // self.num_classes
+                    self.num_outputs = layer.out_dim
+                    self.num_out_per_class = self.num_outputs // self.num_classes
                     layers.append((layer.indices[0], layer.indices[1], layer.weights.argmax(1)))
                 elif isinstance(layer, torch.nn.Flatten):
                     if verbose:
