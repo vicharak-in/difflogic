@@ -1,81 +1,80 @@
-module logicGateNet(
+module logicGateNet #(
+  parameter INPUT_BITS = 400,
+  parameter OUTPUT_BITS = 50
+)
+  (
     input clk,
     input rx,
     output tx
-);
+  );
 
-    wire [7:0] rx_data;
-    wire rx_ready;
-    reg [399:0] input_bits;
-    wire [49:0] output_bits;
-    reg [7:0] tx_data;
-    reg send;
+  wire [7:0] rx_data;
+  wire rx_ready;
+  reg [INPUT_BITS-1:0] input_bits = 0;
+  wire [OUTPUT_BITS-1:0] output_bits;
+  reg [7:0] tx_data = 0;
+  reg send;
 
-    // Counters and flags
-    reg data_pass_flag = 1'b0;
-    integer byte_count     = 0;
-    integer byte2_count    = 0;
-    integer delay_counter  = 0;
+  uart_rx uart_rx_inst (
+    .i_Clock(clk),
+    .i_Rx_Serial(rx),
+    .o_Rx_Byte(rx_data),
+    .o_Rx_DV(rx_ready)
+  );
 
-    // UART Receiver
-    uart_rx uart_rx_inst (
-        .i_Clock(clk),
-        .i_Rx_Serial(rx),
-        .o_Rx_Byte(rx_data),
-        .o_Rx_DV(rx_ready)
-    );
+  localparam INPUT_BYTES = INPUT_BITS / 8;
+  localparam BITS_PER_VALUE = 5;
+  localparam TX_ITERATIONS = OUTPUT_BITS / BITS_PER_VALUE;
 
-    // Data collection and transmission control
-    always @(posedge clk) begin
-        // Receive 50 bytes into input_bits
-        if (rx_ready && byte_count < 50) begin
-            input_bits[(399 - 8*byte_count) -: 8] <= rx_data;
-            byte_count = byte_count + 1;
-        end
-
-        // When reception complete, set flag and initialize delay
-        if (byte_count == 50 && !data_pass_flag) begin
-            data_pass_flag <= 1'b1;
-            delay_counter  <= 0;
-        end
-
-        // Wait one cycle before starting to load tx_data
-        if (data_pass_flag && delay_counter < 1) begin
-            delay_counter <= delay_counter + 1;
-        end
-
-        // After one cycle delay, start loading output bytes
-        if (data_pass_flag && delay_counter >= 1 && byte2_count < 7) begin
-            tx_data <= output_bits[(49 - 8*byte2_count) -: 8];
-            byte2_count = byte2_count + 1;
-        end
-
-        // Once all bytes are loaded, trigger send for one cycle
-        if (data_pass_flag && byte2_count == 7) begin
-            send <= 1'b1;
-
-            // Reset for next packet
-            data_pass_flag <= 1'b0;
-            byte_count     <= 0;
-            byte2_count    <= 0;
-            delay_counter  <= 0;
-        end else begin
-            send <= 1'b0;
-        end
+  reg uart_rx_done = 0;
+  reg signed [15:0] byte_count = INPUT_BYTES - 1;
+  reg [15:0] tx_count = 0;
+  always @(posedge clk) begin
+    if (rx_ready && byte_count >= 0) begin
+      input_bits[byte_count * 8 +: 8] <= rx_data;
+      byte_count <= byte_count - 1;
     end
 
-    // Logic Network (combinational)
-    logic_network logic_net_inst (
-        .x(input_bits),
-        .y(output_bits)
-    );
+    if (byte_count < 0) begin
+      uart_rx_done <= 1;
+      byte_count <= INPUT_BYTES - 1;
+    end
 
-    // UART Transmitter
-    uart_tx uart_tx_inst (
-        .i_Clock(clk),
-        .i_Tx_Byte(tx_data),
-        .i_Tx_DV(send),
-        .o_Tx_Serial(tx)
-    );
+    if (uart_rx_done) begin
+      if (tx_count < TX_ITERATIONS) begin
+        if (tx_active && send <= 1) begin
+          send <= 0;
+        end else if (!tx_active && send <= 0) begin
+          send <= 1;
+        end
 
+        if (tx_done) begin
+          tx_count <= tx_count + 1;
+        end 
+        tx_data <= {3'b000, output_bits[tx_count*5 +: 5]};
+      end else begin
+        uart_rx_done <= 0;
+        send <= 0;
+        tx_count <= 0;
+      end	
+    end 
+
+  end
+
+  logic_network lgn (
+    .x(input_bits),
+    .y(output_bits)
+  );
+
+  wire tx_active;
+  wire tx_done;
+  uart_tx uart_tx_inst (
+    .i_Clock(clk),
+    .i_Tx_Byte(tx_data),
+    .i_Tx_DV(send),
+    .o_Tx_Serial(tx),
+    .o_Tx_Done(tx_done),
+    .o_Tx_Active(tx_active)
+  );
+  
 endmodule
