@@ -275,8 +275,16 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
                 c_file.write(code)
                 c_file.flush()
 
+                name=f"compiled_c_{self.num_bits}bits_{self.num_outputs}.c"
+                path='./saved_files'
+                if not os.path.exists(path):
+                    os.makedirs(path)
+                local_c_file=os.path.join(path, name)
+                shutil.copy(c_file.name, local_c_file)
+
                 if verbose:
                     print('C code created and has {} lines. (temp location {})'.format(len(code.split('\n')), c_file.name))
+                    print(f"C code is copied from {c_file.name} to {local_c_file}")
 
                 t_s = time.time()
                 if self.device == 'cpu':
@@ -304,7 +312,7 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
             if save_lib_path is not None:
                 shutil.copy(lib_file.name, save_lib_path)
                 if verbose:
-                    print('lib_file copied from {} to {} .'.format(lib_file.name, save_lib_path))
+                    print('C lib file named {} copied to {} successfully....'.format(lib_file.name, save_lib_path))
 
             lib = ctypes.cdll.LoadLibrary(lib_file.name)
 
@@ -425,7 +433,8 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
 
         if save_folder:
             os.makedirs(save_folder, exist_ok=True)
-            v_file_path = os.path.join(save_folder, "compiled_verilog.v")
+            name = f"compiled_verilog_{self.num_bits}_{self.num_outputs}.v"
+            v_file_path = os.path.join(save_folder, name)
         else:
             # Use a temporary file if no folder is provided
             v_file = tempfile.NamedTemporaryFile(mode="w", suffix=".v", delete=False)

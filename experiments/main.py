@@ -256,7 +256,7 @@ if __name__ == '__main__':
     parser.add_argument('--grad-factor', type=float, default=1.)
     parser.add_argument('--load_pretrained_model', action="store_true", help="to load a pretrained model for inference")
     parser.add_argument('--save_model', action="store_true", help="to save a trained model")
-    parser.add_argument('--generate_onnx', action="store_true", help="to generate onnx of .pt model")
+    parser.add_argument('--save_files', action="store_true", help="to store .pt, C, .so and verilog files")
     args = parser.parse_args()
 
     ####################################################################################################################
@@ -271,7 +271,10 @@ if __name__ == '__main__':
 
         if args.experiment_id is not None:
             assert 520_000 <= args.experiment_id < 530_000, args.experiment_id
-            results = ResultsJSON(eid=args.experiment_id, path='./results/')
+            path='./results'
+            if not os.path.exists(path):
+                os.makedirs(path)
+            results = ResultsJSON(eid=args.experiment_id, path=path)
             results.store_args(args)
 
         torch.manual_seed(args.seed)
@@ -393,45 +396,86 @@ if __name__ == '__main__':
                 acc3 = correct / total
                 print('COMPILED MODEL', num_bits, acc3)
     
-    if args.generate_verilog:
-        compiled_model = CompiledLogicNet(
-                     model=model,
-                     num_bits=64,
-                     cpu_compiler='gcc',
-                     verbose=True,
-                 )
-        save_folder="./generated-verilog"
+    if args.save_files:
+        #save .pt model
+        save_folder = "./saved_files"
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
             print(f"Created directory: {save_folder}")
-        print(dir(compiled_model))
-        compiled_model.compile_verilog(
-                     save_folder=save_folder,
-                     verbose=False
-                     )
-        print("Verilog generated......")
-
-    if args.save_model:
-        save_folder="./saved_models"
-        if not os.path.exists(save_folder):
-            os.makedirs(save_folder)
-            print(f"Created directory: {save_folder}")
-        print("model.state_dict(): ", model.state_dict())
-        model_path = os.path.join(save_folder, "model.pt")
+        name = f"model_{args.experiment_id}_{args.dataset}_{args.num_neurons}_{args.num_layers}.pt"
+        model_path = os.path.join(save_folder, name)
         torch.save(model.state_dict(), model_path)
-        print("Model saved successfully!")
-    
-    if args.generate_onnx:
-        dummy_input = torch.randn(1,16)
-        torch.onnx.export(
-        model,
-        dummy_input,
-        "model.onnx",
-        input_names=["input"],
-        output_names=["output"]
-        )
+        print(" Model saved successfully!")
+      
+        #generate C and compile
+        print('\n' + '='*80)
+        print(' Converting the model to C code and compiling it...')
+        print('='*80)
 
-        print("Model successfully converted to ONNX format!")
+        for opt_level in range(4):
+
+            for num_bits in [
+                # 8,
+                # 16,
+                # 32,
+                64
+            ]:
+                save_lib_path = 'saved_files/{}_{}_{}_{}_{}.so'.format(
+                    args.experiment_id if args.experiment_id is not None else 0, num_bits, args.dataset, args.num_neurons, args.num_layers
+                )
+
+                compiled_model = CompiledLogicNet(
+                    model=model,
+                    num_bits=num_bits,
+                    cpu_compiler='gcc',
+                    # cpu_compiler='clang',
+                    verbose=True,
+                )
+
+                compiled_model.compile(
+                    opt_level=1 if args.num_layers * args.num_neurons < 50_000 else 0,
+                    save_lib_path=save_lib_path,
+                    verbose=True
+                    )
+                print("model compiled to C......")
+
+                correct, total = 0, 0
+                with torch.no_grad():
+                    for (data, labels) in torch.utils.data.DataLoader(test_loader.dataset, batch_size=int(1e6), shuffle=False):
+                        data = torch.nn.Flatten()(data).bool().numpy()
+                        #print("data: ", data)
+                        output = compiled_model(data, verbose=True)
+                        #print("output: ", output)
+                        correct += (output.argmax(-1) == labels).float().sum()
+                        #print("correct: ", correct)
+                        total += output.shape[0]
+                        #print("total: ", total)
+
+                acc3 = correct / total
+                print('COMPILED MODEL to C, ', num_bits, " bits", ", Accuracy: ", acc3)
+
+        #generate Verilog 
+        print('\n' + '='*80)
+        print(' Converting the model to Verilog code...')
+        print('='*80)
+
+        compiled_model = CompiledLogicNet(
+                model=model,
+                num_bits=64,
+                verbose="True"
+                )
+
+        compiled_model.compile_verilog(
+                save_folder=save_folder,
+                verbose=False
+                )
+        print("Verilog generated....")
+
+
+
+
+
+    
 
 
 
