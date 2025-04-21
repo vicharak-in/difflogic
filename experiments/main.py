@@ -254,6 +254,7 @@ if __name__ == '__main__':
     parser.add_argument('--grad-factor', type=float, default=1.)
     parser.add_argument('--load_pretrained_model', action="store_true", help="to load a pretrained model for inference")
     parser.add_argument('--save_files', action="store_true", help="to store .pt, C, .so and verilog files")
+    parser.add_argument('--compile_upto', type=int, default=None, help='Generate C/Verilog for first X layers only')
     args = parser.parse_args()
 
     ####################################################################################################################
@@ -427,6 +428,7 @@ if __name__ == '__main__':
                     cpu_compiler='gcc',
                     # cpu_compiler='clang',
                     verbose=True,
+                    max_layer=args.compile_upto,
                 )
 
                 compiled_model.compile(
@@ -459,7 +461,8 @@ if __name__ == '__main__':
         compiled_model = CompiledLogicNet(
                 model=model,
                 num_bits=64,
-                verbose="True"
+                verbose="True",
+                max_layer=args.compile_upto
                 )
 
         compiled_model.compile_verilog(

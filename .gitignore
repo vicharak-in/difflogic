@@ -1,0 +1,17 @@
+# Build directories
+build/
+dist/
+difflogic.egg-info/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments (optional)
+venv/
+.env/
+
+# dataset
+data-mnist
+

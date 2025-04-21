@@ -47,6 +47,7 @@ class CompiledLogicNet(torch.nn.Module):
             device='cpu',
             num_bits=64,
             cpu_compiler='gcc',
+            max_layer=None,
             verbose=False,
     ):
         super(CompiledLogicNet, self).__init__()
@@ -54,6 +55,7 @@ class CompiledLogicNet(torch.nn.Module):
         self.device = device
         self.num_bits = num_bits
         self.cpu_compiler = cpu_compiler
+        self.max_layer = max_layer
 
         assert cpu_compiler in ["clang", "gcc"], cpu_compiler
         assert num_bits in [8, 16, 32, 64]
@@ -161,7 +163,7 @@ class CompiledLogicNet(torch.nn.Module):
     def get_c_code(self):
         prefix_sums = [0]
         cur_count = 0
-        for layer_a, layer_b, layer_op in self.layers[:-1]:
+        for layer_a, layer_b, layer_op in self.layers[:(self.max_layer or len(self.layers))-1]:
             cur_count += len(layer_a)
             prefix_sums.append(cur_count)
 
@@ -173,7 +175,7 @@ class CompiledLogicNet(torch.nn.Module):
             f"void logic_gate_net({BITS_TO_DTYPE[self.num_bits]} const *inp, {BITS_TO_DTYPE[self.num_bits]} *out) {{",
         ]
 
-        for layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers):
+        for layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers[:self.max_layer]):
             code.extend(self.get_layer_code(layer_a, layer_b, layer_op, layer_id, prefix_sums))
 
         code.append("}")
@@ -369,6 +371,7 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
 
     def get_verilog_code(self):
         """Generates Verilog code for the logic network."""
+        max_layer = self.max_layer if self.max_layer is not None else len(self.layers)
         neurons_per_class=self.num_outputs // self.num_classes
         log2_neurons_per_class=math.ceil(math.log2(neurons_per_class + 1))
         output_bits=self.num_classes * log2_neurons_per_class
@@ -380,13 +383,13 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
             ");",
         ]
 
-        for layer_id in range(len(self.layers)):
+        for layer_id in range(max_layer):
             print(f"{self.layers[layer_id]}: ", self.layers[layer_id])
             layer_size = len(self.layers[layer_id][0])  #no. of neurons in a layer
 
             code.append(f"      wire [{self.num_outputs-1}:0] layer{layer_id}_out;")
 
-        for layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers):
+        for layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers[:self.max_layer]):
             layer_size = len(layer_a)
             for var_id, (gate_a, gate_b, gate_op) in enumerate(zip(layer_a, layer_b, layer_op)):
                 if layer_id == 0:
@@ -399,12 +402,12 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
                 gate_expr = self.get_verilog_gate_code(a, b, gate_op)
                 code.append(f"    assign layer{layer_id}_out[{var_id}] = {gate_expr};")
 
-            if layer_id==(len(self.layers))-1:
+            if layer_id==max_layer-1:
                 for i in range(self.num_outputs):
                     last_layer_output.append(f"layer{layer_id}_out[{i}]")
 
         code.append(f"      wire [{self.num_outputs-1}:0] last_layer_output;")
-        code.append(f"      assign last_layer_output = layer{len(self.layers)-1}_out;")
+        code.append(f"      assign last_layer_output = layer{max_layer-1}_out;")
         code.append(f"      wire [{log2_neurons_per_class-1}:0] result [{self.num_classes-1}:0];")
         code.append("")
 
