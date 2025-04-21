@@ -26,39 +26,44 @@ module logicGateNet #(
   localparam BITS_PER_VALUE = 5;
   localparam TX_ITERATIONS = OUTPUT_BITS / BITS_PER_VALUE;
 
-  reg uart_rx_done = 0;
-  reg signed [15:0] byte_count = INPUT_BYTES - 1;
   reg [15:0] tx_count = 0;
+  reg [7:0] state = 0;
+  reg signed [15:0] byte_count = INPUT_BYTES - 1;
+
   always @(posedge clk) begin
-    if (rx_ready && byte_count >= 0) begin
-      input_bits[byte_count * 8 +: 8] <= rx_data;
-      byte_count <= byte_count - 1;
-    end
-
-    if (byte_count < 0) begin
-      uart_rx_done <= 1;
-      byte_count <= INPUT_BYTES - 1;
-    end
-
-    if (uart_rx_done) begin
-      if (tx_count < TX_ITERATIONS) begin
-        if (tx_active && send <= 1) begin
-          send <= 0;
-        end else if (!tx_active && send <= 0) begin
-          send <= 1;
+    case(state)
+      0: begin /* reading */
+        if (rx_ready && byte_count >= 0) begin
+          input_bits[byte_count * 8 +: 8] <= rx_data;
+          byte_count <= byte_count - 1;
         end
 
+        if (byte_count < 0) begin
+          byte_count <= INPUT_BYTES - 1;
+          state <= 1;
+        end
+      end
+
+      1: begin /* running */
+        state <= 2;
+      end
+
+      2: begin /* writing back */
+        if (tx_count == TX_ITERATIONS - 1) begin
+          tx_count <= 0;
+          state <= 0;
+        end
+        if (~tx_active) begin
+          send <= 1;
+          tx_data <= {3'b000, output_bits[tx_count*5 +: 5]};
+        end else begin
+          send <= 0;
+        end
         if (tx_done) begin
           tx_count <= tx_count + 1;
-        end 
-        tx_data <= {3'b000, output_bits[tx_count*5 +: 5]};
-      end else begin
-        uart_rx_done <= 0;
-        send <= 0;
-        tx_count <= 0;
-      end	
-    end 
-
+        end
+      end
+    endcase
   end
 
   logic_network lgn (
@@ -76,5 +81,5 @@ module logicGateNet #(
     .o_Tx_Done(tx_done),
     .o_Tx_Active(tx_active)
   );
-  
+
 endmodule

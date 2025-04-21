@@ -13,7 +13,7 @@ BAUD_RATE=115200
 INPUT_BITS=400
 OUTPUT_BITS=50
 INPUT_BYTES=INPUT_BITS //8
-OUTPUT_BYTES=9
+OUTPUT_BYTES=10
 LOG_FILE='uart_log_mnist20x20.txt'
 
 def log_message(msg):
@@ -58,8 +58,9 @@ try:
         print("received_data:", received_data)
         if len(received_data) == OUTPUT_BYTES:
             output_bin = ' '.join(f'{byte:08b}' for byte in received_data)
-            print(f"Received ({OUTPUT_BITS} bits):\n{output_bin}")
-            print("actual label: ", label)
+            print(f"Received ({OUTPUT_BYTES} bytes):\n{output_bin}")
+            print("Actual label: ", label)
+            print("Inferred Label ", np.argmax(np.array([int(aa) for aa in received_data])))
         else:
             print(f"Timeout or incomplete data. Got {len(received_data)} bytes.")
 
