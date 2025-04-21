@@ -9,8 +9,9 @@ def postprocess(input_tensor):
     j = 5
 
     for _ in range(OUTPUT_BYTES):
-        temp = [input_tensor[bit] for bit in range(i, j)]
+        temp=[]
         temp.extend(['0', '0', '0']) #padding -> 8bits
+        temp.extend([input_tensor[bit] for bit in range(i, j)])
         i = j
         j = i + 5
 
