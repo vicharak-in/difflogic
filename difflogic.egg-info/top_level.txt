@@ -1,2 +1,0 @@
-difflogic
-difflogic_cuda
