@@ -260,27 +260,26 @@ if __name__ == '__main__':
     ####################################################################################################################
 
     print(vars(args))
+    assert args.num_iterations % args.eval_freq == 0, (
+             f'iteration count ({args.num_iterations}) has to be divisible by evaluation frequency ({args.eval_freq})'
+         )
+
+    if args.experiment_id is not None:
+        assert 520_000 <= args.experiment_id < 530_000, args.experiment_id
+        path='./results'
+        if not os.path.exists(path):
+            os.makedirs(path)
+        results = ResultsJSON(eid=args.experiment_id, path=path)
+        results.store_args(args)
+
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+
+    train_loader, validation_loader, test_loader = load_dataset(args)
+    model, loss_fn, optim = get_model(args)
 
     if args.load_pretrained_model is not True:
-
-        assert args.num_iterations % args.eval_freq == 0, (
-            f'iteration count ({args.num_iterations}) has to be divisible by evaluation frequency ({args.eval_freq})'
-        )
-
-        if args.experiment_id is not None:
-            assert 520_000 <= args.experiment_id < 530_000, args.experiment_id
-            path='./results'
-            if not os.path.exists(path):
-                os.makedirs(path)
-            results = ResultsJSON(eid=args.experiment_id, path=path)
-            results.store_args(args)
-
-        torch.manual_seed(args.seed)
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-
-        train_loader, validation_loader, test_loader = load_dataset(args)
-        model, loss_fn, optim = get_model(args)
 
     ####################################################################################################################
 
@@ -341,7 +340,8 @@ if __name__ == '__main__':
     ####################################################################################################################
     else:
         model, loss_fn, optim = get_model(args)
-        model.load_state_dict(torch.load("./saved_models/model.pt", weights_only="True"))
+        model_path=f"./saved_files/model_{args.experiment_id}_{args.dataset}_{args.num_neurons}_{args.num_layers}.pt"
+        model.load_state_dict(torch.load(model_path, weights_only="True"))
         model.eval()  # Set the model to evaluation mode
         print("Pretrained model loaded successfully!")
 
