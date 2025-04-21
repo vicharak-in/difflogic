@@ -240,8 +240,6 @@ if __name__ == '__main__':
     parser.add_argument('--packbits_eval', action='store_true', help='Use the PackBitsTensor implementation for an '
                                                                      'additional eval step.')
     parser.add_argument('--compile_model', action='store_true', help='Compile the final model with C for CPU.')
-    parser.add_argument('--generate_verilog', action="store_true", help="Generate the verilog for simulation.")
-
     parser.add_argument('--num-iterations', '-ni', type=int, default=100_000, help='Number of iterations (default: 100_000)')
     parser.add_argument('--eval-freq', '-ef', type=int, default=2_000, help='Evaluation frequency (default: 2_000)')
 
@@ -255,7 +253,6 @@ if __name__ == '__main__':
 
     parser.add_argument('--grad-factor', type=float, default=1.)
     parser.add_argument('--load_pretrained_model', action="store_true", help="to load a pretrained model for inference")
-    parser.add_argument('--save_model', action="store_true", help="to save a trained model")
     parser.add_argument('--save_files', action="store_true", help="to store .pt, C, .so and verilog files")
     args = parser.parse_args()
 
