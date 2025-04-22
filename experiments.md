@@ -46,6 +46,7 @@ EFX_LUT4        : 	1096
 
 ### [2] MNIST(20*20)
 
+- Training command: ` python3 ./experiments/main.py -bs 128 -t  10 --dataset mnist20x20 -ni 1_000 -ef 1_000 -k  200 -l 4 --generate_verilog`
 - ~68% accuracy
 - 4 layers
 - 200 neurons
@@ -79,5 +80,32 @@ EFX_LUT4        :   218
   (5): GroupSum(k=10, tau=10.0)
 )
 ```
-- Training command: ` python3 ./experiments/main.py -bs 128 -t  10 --dataset mnist20x20 -ni 1_000 -ef 1_000 -k  200 -l 4 --generate_verilog`
+
+- Training command: ` python3 ./experiments/main.py -bs 256 -t  10 --dataset mnist20x20 -ni 200_000 -ef 1_000 -k  8000 -l 6 --implementation CUDA --save_files`
+- 96 % accuracy
+- 6 layers
+- 8000 neurons
+- Implementation- CUDA
+- No. of Iterations 200_000
+- Batch size 256
+- Tau 10
+-   LUTs
+- Resource Summary
+
+
+## [3] CIFAR-10-3-threshold
+
+
+- Training command: ` python3 ./experiments/main.py -bs 256 -t  10 --dataset cifar-10-3-threshold -ni 200_000 -ef 1_000 -k  8000 -l 6 --implementation CUDA --save_files`
+- 49 % accuracy
+- 6 layers
+- 8000 neurons
+- Implementation- CUDA
+- No. of Iterations 200_000
+- Batch size 256
+- Tau 10
+-   LUTs
+- Resource Summary
+
+
 
