@@ -378,6 +378,7 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
         last_layer_output= []
         code = [
             "module logic_network ("
+            f"    input clk,",
             f"    input wire [{self.num_inputs-1}:0] x,",
             f"    output wire [{output_bits-1}:0] y",
             ");",
@@ -387,7 +388,11 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
             print(f"{self.layers[layer_id]}: ", self.layers[layer_id])
             layer_size = len(self.layers[layer_id][0])  #no. of neurons in a layer
 
-            code.append(f"      wire [{self.num_outputs-1}:0] layer{layer_id}_out;")
+            code.append(f"      reg [{self.num_outputs-1}:0] layer{layer_id}_out = 0;")
+
+        code.append(f"      reg [{self.num_outputs-1}:0] last_layer_output = 0;")
+        code.append(f"      reg [{log2_neurons_per_class-1}:0] result [{self.num_classes-1}:0];")
+        code.append(f"      always @(posedge clk) begin")
 
         for layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers[:self.max_layer]):
             layer_size = len(layer_a)
@@ -400,26 +405,24 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
                     b = f"layer{layer_id-1}_out[{gate_b}]"
 
                 gate_expr = self.get_verilog_gate_code(a, b, gate_op)
-                code.append(f"    assign layer{layer_id}_out[{var_id}] = {gate_expr};")
+                code.append(f"     layer{layer_id}_out[{var_id}] <= {gate_expr};")
 
             if layer_id==max_layer-1:
                 for i in range(self.num_outputs):
                     last_layer_output.append(f"layer{layer_id}_out[{i}]")
-
-        code.append(f"      wire [{self.num_outputs-1}:0] last_layer_output;")
-        code.append(f"      assign last_layer_output = layer{max_layer-1}_out;")
-        code.append(f"      wire [{log2_neurons_per_class-1}:0] result [{self.num_classes-1}:0];")
+        code.append(f"      last_layer_output <= layer{max_layer-1}_out;")
         code.append("")
 
         for cls in range(self.num_classes):
             base_index = cls * neurons_per_class
             terms = [f"last_layer_output[{base_index + n}]" for n in range(neurons_per_class)]
             joined = " + ".join(terms)
-            code.append(f"      assign result[{cls}] = {joined};")
+            code.append(f"      result[{cls}] <= {joined};")
 
+        code.append("end")
         count=0
-        for i in range(output_bits,0,-5):
-            code.append(f"      assign y[{i-1}:{i-5}]=result[{count}];")
+        for i in range(output_bits,0,-log2_neurons_per_class):
+            code.append(f"      assign y[{i-1}:{i-log2_neurons_per_class}]=result[{count}];")
             count=count+1
 
         code.append("endmodule")
