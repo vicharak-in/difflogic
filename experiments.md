@@ -144,3 +144,32 @@ Sequential(
 )
 ```
 
+
+
+- Training command: `python main.py  -bs 100 -t 100 --dataset cifar-10-3-thresholds  -ni 200_000 -ef 1_000 -k 128_000 -l 4 --save_files`
+-  accuracy
+- No. of iterations: 200_000
+- Neurons 128_000
+- Layers 4
+- Tau 100
+- Implementation- CUDA
+- LUTs (sequential logic)
+- Resource summary:
+  
+- Architecture:
+```
+Sequential(
+  (0): Flatten(start_dim=1, end_dim=-1)
+  (1): LogicLayer(9216, 128000, train)
+  (2): LogicLayer(128000, 128000, train)
+  (3): LogicLayer(128000, 128000, train)
+  (4): LogicLayer(128000, 128000, train)
+  (5): GroupSum(k=10, tau=100.0)
+)
+```
+
+
+
+
+
+
