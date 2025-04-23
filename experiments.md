@@ -155,7 +155,8 @@ Sequential(
 - Implementation- CUDA
 - LUTs (sequential logic)
 - Resource summary:
-  
+
+- Generated [Verilog](https://github.com/vicharak-in/difflogic/blob/main/experiments/saved_files/saved_files/compiled_verilog_64_128000.v), [C](https://github.com/vicharak-in/difflogic/blob/main/experiments/saved_files/saved_files/compiled_c_64bits_128000.c)
 - Architecture:
 ```
 Sequential(
@@ -167,6 +168,7 @@ Sequential(
   (5): GroupSum(k=10, tau=100.0)
 )
 ```
+
 
 
 
