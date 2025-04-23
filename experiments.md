@@ -147,7 +147,7 @@ Sequential(
 
 
 - Training command: `python main.py  -bs 100 -t 100 --dataset cifar-10-3-thresholds  -ni 200_000 -ef 1_000 -k 128_000 -l 4 --save_files`
--  accuracy
+- 57% accuracy
 - No. of iterations: 200_000
 - Neurons 128_000
 - Layers 4
