@@ -89,9 +89,9 @@ EFX_LUT4        :   218
 - No. of Iterations 200_000
 - Batch size 256
 - Tau 10
--   LUTs
+- 4480 LUTs, Slack: +43.696 ns, 50 mhz
 - Resource Summary
-
+  
 
 ## [3] CIFAR-10-3-threshold
 
@@ -104,8 +104,31 @@ EFX_LUT4        :   218
 - No. of Iterations 200_000
 - Batch size 256
 - Tau 10
--   LUTs
+- ~80,000 LUTs
 - Resource Summary
 
 
+- Training command: `python3 main.py -bs 100 -t 100 --dataset cifar-10-3-thresholds -ni 200_000 -ef 1_000 -k 12_000 -l 4 --save_files -eid 524000` 
+-  accuracy
+- 4 layers
+- 12000 neurons
+- Implementation- CUDA
+- No. of iterations 200_000
+- batch size 100
+- tau 100
+-  LUTs
+-  Resource Summary
+
+
+- Architecture:
+```
+Sequential(
+  (0): Flatten(start_dim=1, end_dim=-1)
+  (1): LogicLayer(9216, 12000, train)
+  (2): LogicLayer(12000, 12000, train)
+  (3): LogicLayer(12000, 12000, train)
+  (4): LogicLayer(12000, 12000, train)
+  (5): GroupSum(k=10, tau=100.0)
+)
+```
 
