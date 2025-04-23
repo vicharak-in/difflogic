@@ -104,21 +104,33 @@ EFX_LUT4        :   218
 - No. of Iterations 200_000
 - Batch size 256
 - Tau 10
-- ~80,000 LUTs
+- ~80,000 LUTs (combinational logic)
 - Resource Summary
 
 
 - Training command: `python3 main.py -bs 100 -t 100 --dataset cifar-10-3-thresholds -ni 200_000 -ef 1_000 -k 12_000 -l 4 --save_files -eid 524000` 
--  accuracy
+- 46.12% accuracy
 - 4 layers
 - 12000 neurons
 - Implementation- CUDA
 - No. of iterations 200_000
 - batch size 100
 - tau 100
--  LUTs
+- 197 LUTs (sequential logic)
 -  Resource Summary
+```
+INPUT  PORTS    : 	2
+OUTPUT PORTS    : 	1
 
+EFX_ADD         : 	13
+EFX_LUT4        : 	176
+   1-2  Inputs  : 	42
+   3    Inputs  : 	51
+   4    Inputs  : 	83
+EFX_FF          : 	90
+EFX_GBUFCE      : 	1
+### ### Resource Summary (end) ### ### ###
+```
 
 - Architecture:
 ```
