@@ -25,20 +25,24 @@ for num_bits in [
     # 32,
     64
 ]:
-    save_lib_path = '../saved_files/{}_{}_{}_{}_{}.so'.format(eid, num_bits, dataset, neurons, layers)
+    #save_lib_path = '../saved_files/{}_{}_{}_{}_{}.so'.format(eid, num_bits, dataset, neurons, layers)
+    save_lib_path = './saved_files/0_64_mnist20x20_800_6.so'
     compiled_model = CompiledLogicNet.load(save_lib_path, 10, num_bits)
 
     correct, total = 0, 0
     start_time=time.time()
     for (data, labels) in test_loader:
         data = torch.nn.Flatten()(data).bool().numpy()
-        #print("data: ", data)
         output = compiled_model.forward(data)
-        #print("output: ", output)
+        for i in range(10):
+          print("output: ", output[i])
+          print("output hex: ", [hex(a) for a in output[i]])
+          print("label: ", labels[i])
         correct += (output.argmax(-1) == labels).float().sum()
         #print("correct: ", correct)
         total += output.shape[0]
         #print("total: ", total)
+        exit(1)
     
     end_time=time.time()
     inference_time=end_time-start_time

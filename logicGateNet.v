@@ -1,6 +1,10 @@
 module logicGateNet #(
   parameter INPUT_BITS = 400,
-  parameter OUTPUT_BITS = 50
+  parameter NEURONS = 800,
+  parameter CLASSES = 10,
+  parameter GROUPS = NEURONS / CLASSES,
+  parameter BITS_PER_VALUE = $clog2(GROUPS),
+  parameter OUTPUT_BITS = BITS_PER_VALUE * CLASSES
 )
   (
     input clk,
@@ -23,44 +27,44 @@ module logicGateNet #(
   );
 
   localparam INPUT_BYTES = INPUT_BITS / 8;
-  localparam BITS_PER_VALUE = 5;
   localparam TX_ITERATIONS = OUTPUT_BITS / BITS_PER_VALUE;
+  localparam ZERO_PADS = 8 - BITS_PER_VALUE;
 
   reg [15:0] tx_count = 0;
   reg [7:0] state = 0;
-  reg signed [15:0] byte_count = INPUT_BYTES - 1;
+  reg [15:0] byte_count = 0;
+
+  reg [7:0] infer_count = 0;
 
   always @(posedge clk) begin
     case(state)
       0: begin /* reading */
-        if (rx_ready && byte_count >= 0) begin
+        if (rx_ready && byte_count < INPUT_BYTES) begin
           input_bits[byte_count * 8 +: 8] <= rx_data;
-          byte_count <= byte_count - 1;
-        end
-
-        if (byte_count < 0) begin
-          byte_count <= INPUT_BYTES - 1;
+          byte_count <= byte_count + 1;
+        end else begin 
+          byte_count <= 0;
           state <= 1;
         end
       end
 
       1: begin /* running */
         state <= 2;
+        infer_count <= infer_count + 1;
       end
 
       2: begin /* writing back */
-        if (tx_count == TX_ITERATIONS - 1) begin
+        if (tx_count < TX_ITERATIONS) begin
+          if (~tx_active) begin
+            send <= 1;
+            tx_data <= {{ZERO_PADS{1'b0}}, output_bits[tx_count*BITS_PER_VALUE +: BITS_PER_VALUE]};
+            tx_count <= tx_count + 1;
+          end else begin
+            send <= 0;
+          end
+        end else begin
           tx_count <= 0;
           state <= 0;
-        end
-        if (~tx_active) begin
-          send <= 1;
-          tx_data <= {3'b000, output_bits[tx_count*5 +: 5]};
-        end else begin
-          send <= 0;
-        end
-        if (tx_done) begin
-          tx_count <= tx_count + 1;
         end
       end
     endcase

@@ -9,7 +9,7 @@ import mnist_dataset
 import os
 
 SERIAL_PORT='/dev/ttyUSB1'
-BAUD_RATE=115200
+BAUD_RATE=1500000
 INPUT_BITS=400
 OUTPUT_BITS=50
 INPUT_BYTES=INPUT_BITS //8
@@ -43,7 +43,7 @@ test_set = mnist_dataset.MNIST('./data-mnist', train=False, transform=transforms
 
 try:
     with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=None) as ser:
-        image, label = test_set[1]
+        image, label = test_set[0]
         input_data = preprocess_mnist_image(image) 
         # === SEND DATA ===
         hex_list = [f"{b:02x}" for b in input_data]
@@ -60,6 +60,7 @@ try:
             output_bin = ' '.join(f'{byte:08b}' for byte in received_data)
             print(f"Received ({OUTPUT_BYTES} bytes):\n{output_bin}")
             print("Actual label: ", label)
+            print("Arr: ", np.array([int(aa) for aa in received_data]))
             print("Inferred Label ", np.argmax(np.array([int(aa) for aa in received_data])))
         else:
             print(f"Timeout or incomplete data. Got {len(received_data)} bytes.")

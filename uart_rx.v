@@ -20,7 +20,7 @@ reg [CONFIG_DATA_WIDTH-1:0] r_Clock_Count = 0;
 reg [2:0]                   r_Bit_Index   = 0;
 reg [UART_DATA_WIDTH:0]     r_Rx_Byte     = 0;
 reg                         r_Rx_DV       = 0;
-reg [CONFIG_DATA_WIDTH-1:0] r_config_data = 32'd437;
+reg [CONFIG_DATA_WIDTH-1:0] r_config_data = 32'd34;
 
 
 

@@ -23,7 +23,7 @@ reg [2:0]                   r_Bit_Index = 0;
 reg [UART_DATA_WIDTH-1:0]   r_Tx_Data = 0;
 reg                         r_Tx_Done = 0;
 reg                         r_Tx_Active = 0;
-reg [CONFIG_DATA_WIDTH-1:0] r_config_data = 32'd437;
+reg [CONFIG_DATA_WIDTH-1:0] r_config_data = 32'd34;
 
 /* State Machine Parameters */
 reg [2:0] r_SM_Main = 0;
