@@ -387,64 +387,63 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
 
         # Check if num_outputs exceeds 2**16
         max_register_size = 2**16
-        layers_needed = math.ceil(self.num_outputs / max_register_size)
+        sub_layers_needed = math.ceil(self.num_outputs / max_register_size)
     
         # Split the num_outputs into multiple layers if needed
-        for layer_id in range(layers_needed):
-            start_bit = layer_id * max_register_size
-            end_bit = min((layer_id + 1) * max_register_size - 1, self.num_outputs - 1)
-            code.append(f"      reg [{end_bit - start_bit}:0] layer{layer_id}_out = 0;")
+        if self.num_inputs > max_register_size:
+            for layer_id in range(max_layer):
+                for sub_layer_id in range(sub_layers_needed):
+                    code.append(f"      reg [{max_register_size-1}:0] layer{layer_id}_{sub_layer_id}_out = 0;")
+            code.append(f"      reg [{max_register_size-1}:0] last_layer_output = 0;")
+            code.append(f"      reg [{log2_neurons_per_class-1}:0] result [{self.num_classes-1}: 0];")
+            code.append(f"      always @(posedge clk) begin")
+            
+            for layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers[:self.max_layer]):
+                layer_size=len(layer_a)
+                for sub_layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers[:sub_layers_needed]):
+                    for var_id, (gate_a, gate_b, gate_op) in enumerate(zip(layer_a, layer_b, layer_op)):
+                        if layer_id == 0:
+                            a = f"x[{gate_a}]"
+                            b = f"x[{gate_b}]"
+                        else:
+                            a = f"layer{layer_id-1}_{sub_layer_id}_out[{gate_a}]"
+                            b = f"layer{layer_id-1}_{sub_layer_id}_out[{gate_b}]"
+
+                        gate_expr = self.get_verilog_code(a,b, gate_op)
+                        code.append(f"      layer{layer_id}_{sub_layer_id}_out[{var_id}] <= {gate_expr};")
+
+            for layer_id in range(max_layers):
+                for sub_layer_id in range(sub_layers_needed):
+                    if layer_id == layers_needed-1:
+                        last_layer_output.append(f"layer{layer_id}_{sub_layer_id}_out[{max_register_size-1}]")
+                    else:
+                        last_layer_output.append(f"layer{layer_id}_{sub_layer_id}_out[{max_register_size-1}]")
+
+            code.append(f"      last_layer_output <= {', '.join(last_layer_output)};")
+            code.append("")
+
+            for cls in range(self.num_classes):
+                base_index = cls * neurons_per_class
+                terms = [f"last_layer_output[{base_index + n}]" for n in range(neurons_per_class)]
+                joined = " + ".join(terms)
+                code.append(f"      result[{cls}] <= {joined};")
+
+            code.append("end")
+            count = 0
+            for i in range(output_bits, 0, -log2_neurons_per_class):
+                code.append(f"      assign y[{i-1}:{i-log2_neurons_per_class}] = result[{count}];")
+                count += 1
+
+            code.append("endmodule")
+            return "\n".join(code)
+        
+
+    # else:
+    # code for neurons < 2**16 
     
-        # Output register for the final layer
-        code.append(f"      reg [{self.num_outputs - 1}:0] last_layer_output = 0;")
-        code.append(f"      reg [{log2_neurons_per_class - 1}:0] result [{self.num_classes - 1}:0];")
-        code.append(f"      always @(posedge clk) begin")
-
-        # Logic for all layers
-        for layer_id, (layer_a, layer_b, layer_op) in enumerate(self.layers[:self.max_layer]):
-            layer_size = len(layer_a)
-            for var_id, (gate_a, gate_b, gate_op) in enumerate(zip(layer_a, layer_b, layer_op)):
-                if layer_id == 0:
-                    a = f"x[{gate_a}]"
-                    b = f"x[{gate_b}]"
-                else:
-                    a = f"layer{layer_id-1}_out[{gate_a}]"
-                    b = f"layer{layer_id-1}_out[{gate_b}]"
-
-                gate_expr = self.get_verilog_gate_code(a, b, gate_op)
-                code.append(f"     layer{layer_id}_out[{var_id}] <= {gate_expr};")
-
-        # Handle final layer output assignment
-        for layer_id in range(layers_needed):
-            start_bit = layer_id * max_register_size
-            end_bit = min((layer_id + 1) * max_register_size - 1, self.num_outputs - 1)
-            if layer_id == layers_needed - 1:
-                last_layer_output.append(f"layer{layer_id}_out[{end_bit - start_bit}]")
-            else:
-                last_layer_output.append(f"layer{layer_id}_out[{end_bit - start_bit}]")
-
-        code.append(f"      last_layer_output <= {', '.join(last_layer_output)};")
-        code.append("")
-
-        # Accumulate results
-        for cls in range(self.num_classes):
-            base_index = cls * neurons_per_class
-            terms = [f"last_layer_output[{base_index + n}]" for n in range(neurons_per_class)]
-            joined = " + ".join(terms)
-            code.append(f"      result[{cls}] <= {joined};")
-
-        code.append("end")
-        count = 0
-        for i in range(output_bits, 0, -log2_neurons_per_class):
-            code.append(f"      assign y[{i-1}:{i-log2_neurons_per_class}] = result[{count}];")
-            count += 1
-
-        code.append("endmodule")
-        return "\n".join(code)
-
     def compile_verilog(self, save_folder=None, verbose=True):
         if self.device != 'cpu':
-            raise ValueError(f"Device {self.device} not supported.")
+            raise ValueCError(f"Device {self.device} not supported.")
 
         code = self.get_verilog_code()
 
