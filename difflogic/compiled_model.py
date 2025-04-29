@@ -409,7 +409,7 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
                             a = f"layer{layer_id-1}_{sub_layer_id}_out[{gate_a}]"
                             b = f"layer{layer_id-1}_{sub_layer_id}_out[{gate_b}]"
 
-                        gate_expr = self.get_verilog_code(a,b, gate_op)
+                        gate_expr = self.get_verilog_gate_code(a,b, gate_op)
                         code.append(f"      layer{layer_id}_{sub_layer_id}_out[{var_id}] <= {gate_expr};")
 
             for layer_id in range(max_layers):
