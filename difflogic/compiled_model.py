@@ -390,7 +390,7 @@ void apply_logic_gate_net (bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len
         sub_layers_needed = math.ceil(self.num_outputs / max_register_size)
     
         # Split the num_outputs into multiple layers if needed
-        if self.num_inputs > max_register_size:
+        if self.num_outputs > max_register_size:
             for layer_id in range(max_layer):
                 for sub_layer_id in range(sub_layers_needed):
                     code.append(f"      reg [{max_register_size-1}:0] layer{layer_id}_{sub_layer_id}_out = 0;")
