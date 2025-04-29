@@ -410,48 +410,46 @@ if __name__ == '__main__':
         print(' Converting the model to C code and compiling it...')
         print('='*80)
 
-        for opt_level in range(4):
-
-            for num_bits in [
+        for num_bits in [
                 # 8,
                 # 16,
                 # 32,
                 64
-            ]:
-                save_lib_path = 'saved_files/{}_{}_{}_{}_{}.so'.format(
-                    args.experiment_id if args.experiment_id is not None else 0, num_bits, args.dataset, args.num_neurons, args.num_layers
+        ]:
+            save_lib_path = 'saved_files/{}_{}_{}_{}_{}.so'.format(
+            args.experiment_id if args.experiment_id is not None else 0, num_bits, args.dataset, args.num_neurons, args.num_layers
                 )
 
-                compiled_model = CompiledLogicNet(
-                    model=model,
-                    num_bits=num_bits,
+            compiled_model = CompiledLogicNet(
+                model=model,
+                num_bits=num_bits,
                     cpu_compiler='gcc',
                     # cpu_compiler='clang',
                     verbose=True,
                     max_layer=args.compile_upto,
-                )
+            )
 
-                compiled_model.compile(
+            compiled_model.compile(
                     opt_level=1 if args.num_layers * args.num_neurons < 50_000 else 0,
                     save_lib_path=save_lib_path,
                     verbose=True
                     )
-                print("model compiled to C......")
+            print("model compiled to C......")
 
-                correct, total = 0, 0
-                with torch.no_grad():
-                    for (data, labels) in torch.utils.data.DataLoader(test_loader.dataset, batch_size=int(1e6), shuffle=False):
-                        data = torch.nn.Flatten()(data).bool().numpy()
+            correct, total = 0, 0
+            with torch.no_grad():
+                for (data, labels) in torch.utils.data.DataLoader(test_loader.dataset, batch_size=int(1e6), shuffle=False):
+                    data = torch.nn.Flatten()(data).bool().numpy()
                         #print("data: ", data)
-                        output = compiled_model(data, verbose=True)
+                    output = compiled_model(data, verbose=True)
                         #print("output: ", output)
-                        correct += (output.argmax(-1) == labels).float().sum()
+                    correct += (output.argmax(-1) == labels).float().sum()
                         #print("correct: ", correct)
-                        total += output.shape[0]
+                    total += output.shape[0]
                         #print("total: ", total)
 
-                acc3 = correct / total
-                print('COMPILED MODEL to C, ', num_bits, " bits", ", Accuracy: ", acc3)
+            acc3 = correct / total
+            print('COMPILED MODEL to C, ', num_bits, " bits", ", Accuracy: ", acc3)
 
         #generate Verilog 
         print('\n' + '='*80)
