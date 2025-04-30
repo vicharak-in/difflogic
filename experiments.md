@@ -173,11 +173,3 @@ Sequential(
     5.9131 seconds [for 10k images] 
     ~590 microsec [for 1 image]
    ```
- 
-
-
-
-
-
-
-
