@@ -168,6 +168,7 @@ Sequential(
   (5): GroupSum(k=10, tau=100.0)
 )
 ```
+- CPU Inference time: 5.9131 seconds (57% accuracy)
 
 
 
