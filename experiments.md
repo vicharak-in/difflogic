@@ -85,7 +85,7 @@ EFX_LUT4        :   218
 - 96 % accuracy
 - 6 layers
 - 8000 neurons
-- Implementation- CUDA
+- Implementation- CUDA (GTX 1650)
 - No. of Iterations 200_000
 - Batch size 256
 - Tau 10
@@ -100,7 +100,7 @@ EFX_LUT4        :   218
 - 49 % accuracy
 - 6 layers
 - 8000 neurons
-- Implementation- CUDA
+- Implementation- CUDA (GTX 1650)
 - No. of Iterations 200_000
 - Batch size 256
 - Tau 10
@@ -112,7 +112,7 @@ EFX_LUT4        :   218
 - 46.12% accuracy
 - 4 layers
 - 12000 neurons
-- Implementation- CUDA
+- Implementation- CUDA (GTX 1650)
 - No. of iterations 200_000
 - batch size 100
 - tau 100
@@ -152,7 +152,7 @@ Sequential(
 - Neurons 128_000
 - Layers 4
 - Tau 100
-- Implementation- CUDA
+- Implementation- CUDA( GTX 1650)
 - LUTs (sequential logic)
 - Resource summary:
 
