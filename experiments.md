@@ -168,8 +168,12 @@ Sequential(
   (5): GroupSum(k=10, tau=100.0)
 )
 ```
-- CPU Inference time: 5.9131 seconds (57% accuracy)
-
+- CPU Inference time(on CIFAR-10 test dataset of 10k images) (57% accuracy)
+   ```
+    5.9131 seconds [for 10k images] 
+    ~590 microsec [for 1 image]
+   ```
+ 
 
 
 
