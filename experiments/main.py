@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import torch
 import torchvision
+import logging
 from tqdm import tqdm
 from results_json import ResultsJSON
 import mnist_dataset
@@ -22,8 +23,14 @@ BITS_TO_TORCH_FLOATING_POINT_TYPE = {
 
 def setup_logging(log_path):
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    sys.stdout = open(log_path, 'w')
-    sys.stderr = sys.stdout
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_path),
+            logging.StreamHandler()
+        ]
+    )
 
 def load_dataset(args):
     validation_loader = None
@@ -171,7 +178,7 @@ def get_model(args):
     loss_fn = torch.nn.CrossEntropyLoss()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-
+    logging.info(model)
     return model, loss_fn, optimizer
 
 
@@ -276,7 +283,7 @@ if __name__ == '__main__':
     if args.log_file:
         setup_logging(args.log_file)
 
-    print(vars(args))
+    logging.info(vars(args))
     assert args.num_iterations % args.eval_freq == 0, (
              f'iteration count ({args.num_iterations}) has to be divisible by evaluation frequency ({args.eval_freq})'
          )
@@ -342,14 +349,14 @@ if __name__ == '__main__':
                 if args.experiment_id is not None:
                     results.store_results(r)
                 else:
-                    print(r)
+                    logging.info(r)
 
                 if valid_accuracy_eval_mode > best_acc:
                     best_acc = valid_accuracy_eval_mode
                     if args.experiment_id is not None:
                         results.store_final_results(r)
                     else:
-                        print('IS THE BEST UNTIL NOW.')
+                        logging.info('IS THE BEST UNTIL NOW')
 
                 if args.experiment_id is not None:
                     results.save()
@@ -360,12 +367,12 @@ if __name__ == '__main__':
         model_path=f"./saved_files/model_{args.experiment_id}_{args.dataset}_{args.num_neurons}_{args.num_layers}.pt"
         model.load_state_dict(torch.load(model_path, weights_only="True"))
         model.eval()  # Set the model to evaluation mode
-        print("Pretrained model loaded successfully!")
+        logging.info("Pretrained model loaded successfully!")
 
     if args.compile_model:
-        print('\n' + '='*80)
-        print(' Converting the model to C code and compiling it...')
-        print('='*80)
+        logging.info('\n' + '='*80)
+        logging.info(' Converting the model to C code and compiling it...')
+        logging.info('='*80)
         for num_bits in [
                 # 8,
                 # 16,
@@ -411,16 +418,16 @@ if __name__ == '__main__':
         save_folder = "./saved_files"
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
-            print(f"Created directory: {save_folder}")
+            logging.info(f"Created directory: {save_folder}")
         name = f"model_{args.experiment_id}_{args.dataset}_{args.num_neurons}_{args.num_layers}.pt"
         model_path = os.path.join(save_folder, name)
         torch.save(model.state_dict(), model_path)
-        print(" Model saved successfully!")
+        logging.info(" Model saved successfully!")
       
         #generate C and compile
-        print('\n' + '='*80)
-        print(' Converting the model to C code and compiling it...')
-        print('='*80)
+        logging.info('\n' + '='*80)
+        logging.info(' Converting the model to C code and compiling it...')
+        logging.info('='*80)
 
         for num_bits in [
                 # 8,
@@ -464,9 +471,9 @@ if __name__ == '__main__':
             print('COMPILED MODEL to C, ', num_bits, " bits", ", Accuracy: ", acc3)
 
         #generate Verilog 
-        print('\n' + '='*80)
-        print(' Converting the model to Verilog code...')
-        print('='*80)
+        logging.info('\n' + '='*80)
+        logging.info(' Converting the model to Verilog code...')
+        logging.info('='*80)
 
         compiled_model = CompiledLogicNet(
                 model=model,
@@ -479,7 +486,7 @@ if __name__ == '__main__':
                 save_folder=save_folder,
                 verbose=False
                 )
-        print("Verilog generated....")
+        logging.info("Verilog generated....")
 
 
 
