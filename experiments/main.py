@@ -2,14 +2,12 @@ import argparse
 import math
 import random
 import os
-
+import sys
 import numpy as np
 import torch
 import torchvision
 from tqdm import tqdm
-
 from results_json import ResultsJSON
-
 import mnist_dataset
 import uci_datasets
 from difflogic import LogicLayer, GroupSum, PackBitsTensor, CompiledLogicNet
@@ -22,6 +20,10 @@ BITS_TO_TORCH_FLOATING_POINT_TYPE = {
     64: torch.float64
 }
 
+def setup_logging(log_path):
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    sys.stdout = open(log_path, 'w')
+    sys.stderr = sys.stdout
 
 def load_dataset(args):
     validation_loader = None
@@ -173,15 +175,26 @@ def get_model(args):
     return model, loss_fn, optimizer
 
 
-def train(model, x, y, loss_fn, optimizer):
+def train(model, x, y, loss_fn, optimizer, profile_batch=False):
+    if profile_batch:
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        torch.cuda.synchronize()
+        start_event.record()
+
     x = model(x)
     loss = loss_fn(x, y)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+    
+    if profile_batch:
+        end_event.record()
+        torch.cuda.synchronize()
+        batch_time = start_event.elapsed_time(end_event)
+        print(f"Time per batch: {batch_time:.3f} ms")
 
     return loss.item()
-
 
 def eval(model, loader, mode):
     orig_mode = model.training
@@ -255,9 +268,13 @@ if __name__ == '__main__':
     parser.add_argument('--load_pretrained_model', action="store_true", help="to load a pretrained model for inference")
     parser.add_argument('--save_files', action="store_true", help="to store .pt, C, .so and verilog files")
     parser.add_argument('--compile_upto', type=int, default=None, help='Generate C/Verilog for first X layers only')
+    parser.add_argument('--profile_batch_time', action='store_true')
+    parser.add_argument('--log_file', type=str, default=None)
     args = parser.parse_args()
 
     ####################################################################################################################
+    if args.log_file:
+        setup_logging(args.log_file)
 
     print(vars(args))
     assert args.num_iterations % args.eval_freq == 0, (
@@ -293,7 +310,7 @@ if __name__ == '__main__':
             x = x.to(BITS_TO_TORCH_FLOATING_POINT_TYPE[args.training_bit_count]).to('cuda')
             y = y.to('cuda')
 
-            loss = train(model, x, y, loss_fn, optim)
+            loss = train(model, x, y, loss_fn, optim, profile_batch=(args.profile_batch_time and i == 0))
 
             if (i+1) % args.eval_freq == 0:
                 if args.extensive_eval:
@@ -349,48 +366,43 @@ if __name__ == '__main__':
         print('\n' + '='*80)
         print(' Converting the model to C code and compiling it...')
         print('='*80)
-
-        for opt_level in range(4):
-
-            for num_bits in [
+        for num_bits in [
                 # 8,
                 # 16,
                 # 32,
                 64
-            ]:
-                os.makedirs('lib', exist_ok=True)
-                save_lib_path = 'lib/{:08d}_{}.so'.format(
-                    args.experiment_id if args.experiment_id is not None else 0, num_bits
-                )
+        ]:
+            os.makedirs('lib', exist_ok=True)
+            save_lib_path = 'lib/{:08d}_{}.so'.format(
+            args.experiment_id if args.experiment_id is not None else 0, num_bits
+            )
 
-                compiled_model = CompiledLogicNet(
+            compiled_model = CompiledLogicNet(
                     model=model,
                     num_bits=num_bits,
                     cpu_compiler='gcc',
                     # cpu_compiler='clang',
                     verbose=True,
-                )
-                print("Compiled_model: ", compiled_model)
-
-                compiled_model.compile(
+                    )
+            print("Compiled_model: ", compiled_model)
+            compiled_model.compile(
                     opt_level=1 if args.num_layers * args.num_neurons < 50_000 else 0,
                     save_lib_path=save_lib_path,
                     verbose=True
                     )
-                print("model compiled......")
+            print("model compiled......")
 
-                correct, total = 0, 0
-                with torch.no_grad():
-                    for (data, labels) in torch.utils.data.DataLoader(test_loader.dataset, batch_size=int(1e6), shuffle=False):
-                        data = torch.nn.Flatten()(data).bool().numpy()
-                        print("data: ", data)
-                        output = compiled_model(data, verbose=True)
-                        print("output: ", output)
-                        correct += (output.argmax(-1) == labels).float().sum()
-                        print("correct: ", correct)
-                        total += output.shape[0]
-                        print("total: ", total)
-
+            correct, total = 0, 0
+            with torch.no_grad():
+                for (data, labels) in torch.utils.data.DataLoader(test_loader.dataset, batch_size=int(1e6), shuffle=False):
+                    data = torch.nn.Flatten()(data).bool().numpy()
+                    print("data: ", data)
+                    output = compiled_model(data, verbose=True)
+                    print("output: ", output)
+                    correct += (output.argmax(-1) == labels).float().sum()
+                    print("correct: ", correct)
+                    total += output.shape[0]
+                    print("total: ", total)
                 acc3 = correct / total
                 print('COMPILED MODEL', num_bits, acc3)
     
