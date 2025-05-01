@@ -8,9 +8,9 @@ torch.set_num_threads(1)
 
 dataset = 'mnist20x20'
 batch_size = 128
-eid=520000
-neurons= 200
-layers =4
+eid=0
+neurons= 800
+layers =6
 
 transforms = torchvision.transforms.Compose([
     torchvision.transforms.ToTensor(),
@@ -25,7 +25,7 @@ for num_bits in [
     # 32,
     64
 ]:
-    save_lib_path = '../saved_files/{}_{}_{}_{}_{}.so'.format(eid, num_bits, dataset, neurons, layers)
+    save_lib_path = './saved_files/{}_{}_{}_{}_{}.so'.format(eid, num_bits, dataset, neurons, layers)
     compiled_model = CompiledLogicNet.load(save_lib_path, 10, num_bits)
 
     correct, total = 0, 0
