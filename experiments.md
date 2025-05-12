@@ -46,7 +46,7 @@ EFX_LUT4        : 	1096
 
 ### [2] MNIST(20*20)
 
-- Training command: ` python3 ./experiments/main.py -bs 128 -t  10 --dataset mnist20x20 -ni 1_000 -ef 1_000 -k  200 -l 4 --generate_verilog`
+1. Training command: ` python3 ./experiments/main.py -bs 128 -t  10 --dataset mnist20x20 -ni 1_000 -ef 1_000 -k  200 -l 4 --generate_verilog`
 - ~68% accuracy
 - 4 layers
 - 200 neurons
@@ -81,7 +81,7 @@ EFX_LUT4        :   218
 )
 ```
 
-- Training command: ` python3 ./experiments/main.py -bs 256 -t  10 --dataset mnist20x20 -ni 200_000 -ef 1_000 -k  8000 -l 6 --implementation CUDA --save_files`
+2. Training command: ` python3 ./experiments/main.py -bs 256 -t  10 --dataset mnist20x20 -ni 200_000 -ef 1_000 -k  8000 -l 6 --implementation CUDA --save_files`
 - 96 % accuracy
 - 6 layers
 - 8000 neurons
@@ -89,9 +89,41 @@ EFX_LUT4        :   218
 - No. of Iterations 200_000
 - Batch size 256
 - Tau 10
-- 4480 LUTs, Slack: +43.696 ns, 50 mhz
+- 4480 LUTs, Slack: +43.696 ns, clock frequency: 50 mhz
 - Resource Summary
-  
+
+### Training a large mnist20x20 network
+
+1. Training command: `python3 main.py --dataset mnist20x20 -t 10 -bs 256 -k 1500 -l 8 -ni 200_000 -ef 20_000 --implementation cuda --save_files`
+- 90% accuracy
+- 8 layers
+- 1500 neurons
+- Implementation- CUDA (RTX 3080)
+- No. of iterations 200_000
+- Batch size 256
+- Tau 10
+- ? LUTs, Slack: ? , clock frequency: ?
+- 160 iterations/sec 
+
+Model architecture 
+
+```
+  Sequential(
+  (0): Flatten(start_dim=1, end_dim=-1)
+  (1): LogicLayer(400, 1500, train)
+  (2): LogicLayer(1500, 1500, train)
+  (3): LogicLayer(1500, 1500, train)
+  (4): LogicLayer(1500, 1500, train)
+  (5): LogicLayer(1500, 1500, train)
+  (6): LogicLayer(1500, 1500, train)
+  (7): LogicLayer(1500, 1500, train)
+  (8): LogicLayer(1500, 1500, train)
+  (9): GroupSum(k=10, tau=10.0)
+)
+
+```
+- Outcome: Verilog generation failed(need to fix main branch's code) 
+
 
 ## [3] CIFAR-10-3-threshold
 
