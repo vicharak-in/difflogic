@@ -265,6 +265,58 @@ void apply_logic_gate_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len)
         }}
     }}
 
+    // --- LOGGING TO in_out.csv STARTS HERE ---
+
+    // Open CSV output file for appending results
+    FILE* csv_file = fopen("in_out.csv", "a");
+    if (!csv_file) {{
+        perror("Failed to open in_out.csv");
+        exit(EXIT_FAILURE);
+    }}
+    
+    for (size_t i = 0; i < 1; ++i) {{
+        // 1. Log input bits (400 bits)
+        for (size_t b = 0; b < 400; ++b) {{
+            size_t bit_index = i * 400 + b;
+            size_t byte_index = bit_index / 8;
+            size_t bit_offset = 7 - (bit_index % 8); // big endian
+            uint8_t bit = (inp[byte_index] >> bit_offset) & 1;
+            fprintf(csv_file, "%d", bit);
+        }}
+
+        // 2. Log output bits after adder for each class
+        for (size_t c = 0; c < {self.num_classes}; ++c) {{
+            for (size_t d = 0; d < {log2_of_num_neurons_per_class_ll}; ++d) {{
+                fprintf(csv_file, ",%" PRIu64, (uint64_t)out_temp_o[c * {log2_of_num_neurons_per_class_ll} + d]);
+            }}
+        }}
+
+        // 3. Compute and log final prediction
+        uint32_t class_scores[{self.num_classes}];
+        for (size_t c = 0; c < {self.num_classes}; ++c) {{
+            uint32_t val = 0;
+            for (size_t b = 0; b < {self.num_bits}; ++b) {{
+                val <<= 1;
+                val += out[(i * {self.num_bits} + b) * {self.num_classes} + c];
+            }}
+            class_scores[c] = val;
+        }}
+
+        size_t predicted_class = 0;
+        uint32_t max_val = class_scores[0];
+        for (size_t c = 1; c < {self.num_classes}; ++c) {{
+            if (class_scores[c] > max_val) {{
+                max_val = class_scores[c];
+                predicted_class = c;
+            }}
+        }}
+
+        fprintf(csv_file, ",%zu", predicted_class);
+    }}
+
+    fclose(csv_file);
+    // --- LOGGING TO in_out.csv ENDS HERE ---
+
     fclose(log_file);
     free(inp_temp);
     free(out_temp);
