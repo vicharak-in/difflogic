@@ -261,7 +261,6 @@ void apply_logic_gate_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len)
     }}
 
     // --- LOGGING TO in_out.csv STARTS HERE ---
-
     // Open CSV output file for appending results
     FILE* csv_file = fopen("in_out.csv", "a");
     if (!csv_file) {{
@@ -270,7 +269,7 @@ void apply_logic_gate_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len)
     }}
    
 
-    fclose(log_file);
+   // fclose(log_file);
     free(inp_temp);
     free(out_temp);
     free(out_temp_o);
