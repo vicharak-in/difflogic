@@ -172,7 +172,6 @@ class CompiledLogicNet(torch.nn.Module):
             "#include <stdlib.h>",
             "#include <stdbool.h>",
             "#include <stdio.h>",
-            "#include <inttypes.h>  // for PRIu64, etc",
             "",
             f"void logic_gate_net({BITS_TO_DTYPE[self.num_bits]} const *inp, {BITS_TO_DTYPE[self.num_bits]} *out) {{",
         ]
@@ -186,81 +185,77 @@ class CompiledLogicNet(torch.nn.Module):
         log2_of_num_neurons_per_class_ll = math.ceil(math.log2(num_neurons_ll / self.num_classes + 1))
         num_neurons_per_class = self.layers[-1][0].shape[0] // self.num_classes
         
-        code.append(f"""
+        code.append(fr"""
+void print_binary(long long n) {{
+    for (int i = sizeof(n)*8; i >= 0; i--) {{
+	    printf("%d", (n >> i) & 1);
+    }}
+        printf(" %d ", sizeof(n) * 8);
+    }}
+
+void print_binary_n(long long n, int i) {{
+    printf("%d", (n >> i) & 1);
+}}
+""")
+        code.append(fr"""
 void apply_logic_gate_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len) {{
     {BITS_TO_DTYPE[self.num_bits]} *inp_temp = malloc({self.num_inputs} * sizeof({BITS_TO_DTYPE[self.num_bits]}));
     {BITS_TO_DTYPE[self.num_bits]} *out_temp = malloc({num_neurons_ll} * sizeof({BITS_TO_DTYPE[self.num_bits]}));
-    {BITS_TO_DTYPE[self.num_bits]} *out_temp_o = malloc({log2_of_num_neurons_per_class_ll} * sizeof({BITS_TO_DTYPE[self.num_bits]}));
+    {BITS_TO_DTYPE[self.num_bits]} *out_temp_o = malloc({log2_of_num_neurons_per_class_ll} * sizeof({BITS_TO_DTYPE[self.num_bits]}));    for(size_t i = 0; i < len; ++i) {{
 
-    FILE *log_file = fopen("inference_log.txt", "w");
-    if (!log_file) {{
-        perror("Failed to open log file");
-        return;
-    }}
-
-    for (size_t i = 0; i < len; ++i) {{
-
-        // Print raw input bits
-        fprintf(log_file, "Sample %zu raw input bits:\\n", i);
-        for (size_t b = 0; b < {self.num_inputs} * {self.num_bits}; ++b) {{
-            fprintf(log_file, "%d", inp[i * {self.num_inputs} * {self.num_bits} + b]);
-            if ((b + 1) % {self.num_inputs} == 0) fprintf(log_file, "\\n");
-        }}
-
-        // Converting bool array to bitpacked inp_temp
-        for (size_t d = 0; d < {self.num_inputs}; ++d) {{
+        // Converting the bool array into a bitpacked array
+        for(size_t d = 0; d < {self.num_inputs}; ++d) {{
             {BITS_TO_DTYPE[self.num_bits]} res = {BITS_TO_ZERO_LITERAL[self.num_bits]};
-            for (size_t b = 0; b < {self.num_bits}; ++b) {{
+            for(size_t b = 0; b < {self.num_bits}; ++b) {{
                 res <<= 1;
                 res += !!(inp[i * {self.num_inputs} * {self.num_bits} + ({self.num_bits} - b - 1) * {self.num_inputs} + d]);
             }}
             inp_temp[d] = res;
         }}
-
-        // Print bitpacked inputs
-        fprintf(log_file, "Sample %zu bitpacked inputs:\\n", i);
-        for (size_t d = 0; d < {self.num_inputs}; ++d) {{
-            fprintf(log_file, "inp_temp[%zu] = %" PRIu64 "\\n", d, (uint64_t)inp_temp[d]);
+        
+        //To print the input binary[400 bits]
+        for (int d = 0; d < 400; ++d) {{
+	        printf("%d. ", d);
+	        print_binary(inp_temp[d]);
+	        printf("\n");
         }}
+	    printf("\n");
 
-        // Apply logic gate network
+
+        // Applying the logic gate net
         logic_gate_net(inp_temp, out_temp);
 
-        for (size_t c = 0; c < {self.num_classes}; ++c) {{
-
-            // Clear output temp for sum
-            for (size_t d = 0; d < {log2_of_num_neurons_per_class_ll}; ++d) {{
+        // GroupSum of the results via logic gate networks
+        for(size_t c = 0; c < {self.num_classes}; ++c) {{  // for each class
+            // Initialize the output bits
+            for(size_t d = 0; d < {log2_of_num_neurons_per_class_ll}; ++d) {{
                 out_temp_o[d] = {BITS_TO_ZERO_LITERAL[self.num_bits]};
             }}
 
-            for (size_t a = 0; a < {self.layers[-1][0].shape[0] // self.num_classes}; ++a) {{
+            // Apply the adder logic gate network
+            for(size_t a = 0; a < {self.layers[-1][0].shape[0] // self.num_classes}; ++a) {{
                 {BITS_TO_DTYPE[self.num_bits]} carry = out_temp[c * {self.layers[-1][0].shape[0] // self.num_classes} + a];
                 {BITS_TO_DTYPE[self.num_bits]} out_temp_o_d;
-                for (int d = {log2_of_num_neurons_per_class_ll} - 1; d >= 0; --d) {{
-                    out_temp_o_d = out_temp_o[d];
+                for(int d = {log2_of_num_neurons_per_class_ll} - 1; d >= 0; --d) {{
+                    out_temp_o_d  = out_temp_o[d];
                     out_temp_o[d] = carry ^ out_temp_o_d;
-                    carry = carry & out_temp_o_d;
+                    carry         = carry & out_temp_o_d;
+                    printf("%d ", out_temp_o[d]); //printing adder bits
                 }}
+                printf("\n");
             }}
 
-            // Print result bits after group adder
-            fprintf(log_file, "Class %zu - Output bits after adder (out_temp_o):\\n", c);
-            for (size_t d = 0; d < {log2_of_num_neurons_per_class_ll}; ++d) {{
-                fprintf(log_file, "out_temp_o[%zu] = %" PRIu64 "\\n", d, (uint64_t)out_temp_o[d]);
-            }}
-
-            // Final unpacked output bits
-            for (size_t b = 0; b < {self.num_bits}; ++b) {{
+            // Unpack the result bits
+            for(size_t b = 0; b < {self.num_bits}; ++b) {{
                 const {BITS_TO_DTYPE[self.num_bits]} bit_mask = {BITS_TO_ONE_LITERAL[self.num_bits]} << b;
                 {BITS_TO_DTYPE[32]} res = 0;
-                for (size_t d = 0; d < {log2_of_num_neurons_per_class_ll}; ++d) {{
+                for(size_t d = 0; d < {log2_of_num_neurons_per_class_ll}; ++d) {{
                     res <<= 1;
                     res += !!(out_temp_o[d] & bit_mask);
                 }}
                 out[(i * {self.num_bits} + b) * {self.num_classes} + c] = res;
-
-                // Log each final output result
-                fprintf(log_file, "Output[%zu][bit %zu][class %zu] = %" PRIu32 "\\n", i, b, c, (uint32_t)res);
+                printf("%d ", res);
+                printf("\n");
             }}
         }}
     }}
@@ -273,49 +268,7 @@ void apply_logic_gate_net(bool const *inp, {BITS_TO_DTYPE[32]} *out, size_t len)
         perror("Failed to open in_out.csv");
         exit(EXIT_FAILURE);
     }}
-    
-    for (size_t i = 0; i < 1; ++i) {{
-        // 1. Log input bits (400 bits)
-        for (size_t b = 0; b < 400; ++b) {{
-            size_t bit_index = i * 400 + b;
-            size_t byte_index = bit_index / 8;
-            size_t bit_offset = 7 - (bit_index % 8); // big endian
-            uint8_t bit = (inp[byte_index] >> bit_offset) & 1;
-            fprintf(csv_file, "%d", bit);
-        }}
-
-        // 2. Log output bits after adder for each class
-        for (size_t c = 0; c < {self.num_classes}; ++c) {{
-            for (size_t d = 0; d < {log2_of_num_neurons_per_class_ll}; ++d) {{
-                fprintf(csv_file, ",%" PRIu64, (uint64_t)out_temp_o[c * {log2_of_num_neurons_per_class_ll} + d]);
-            }}
-        }}
-
-        // 3. Compute and log final prediction
-        uint32_t class_scores[{self.num_classes}];
-        for (size_t c = 0; c < {self.num_classes}; ++c) {{
-            uint32_t val = 0;
-            for (size_t b = 0; b < {self.num_bits}; ++b) {{
-                val <<= 1;
-                val += out[(i * {self.num_bits} + b) * {self.num_classes} + c];
-            }}
-            class_scores[c] = val;
-        }}
-
-        size_t predicted_class = 0;
-        uint32_t max_val = class_scores[0];
-        for (size_t c = 1; c < {self.num_classes}; ++c) {{
-            if (class_scores[c] > max_val) {{
-                max_val = class_scores[c];
-                predicted_class = c;
-            }}
-        }}
-
-        fprintf(csv_file, ",%zu", predicted_class);
-    }}
-
-    fclose(csv_file);
-    // --- LOGGING TO in_out.csv ENDS HERE ---
+   
 
     fclose(log_file);
     free(inp_temp);
